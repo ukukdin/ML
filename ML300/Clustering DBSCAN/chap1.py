@@ -795,25 +795,24 @@ for label_case in ["dbscan_label", "kmeans_label"]:
 def find_matching_cluster(cluster_case,actual_labels,cluster_labels):
     matched_cluster={} #딕셔너리에 저장을 했습니다.
     temp_labels= [i+100 for i in range(100)] #list 형태의 템포라리형태의 라벨을 만들어줍니다.
-    actual_case = list(set(actual_labels))#실제 케이스는 set으로 고유 값을 가져오는데 list형태로 저장해주비낟.
-
-    for i in cluster_case:
+    actual_case = list(set(actual_labels))#실제 케이스는 set으로 고유 값을 가져오는데 list형태로 저장해주비낟.    for i in cluster_case:
         #forloop 을 처음 시작하고 dbscan의 특징으로 라벨개수를 알지못하니깐 실제 할당받은 개수가 0보다 클경우 에는
         #아래에 짜논 함수가 돌아가고 그렇치 아는경우 즉 0일 경우는 뉴라벨을 없는걸로저장을 합니다.
+    for i in cluster_case:
       if len(actual_case) > 0:
-        idx = cluster_labels==i
+        idx = cluster_labels == i
         new_label=scipy.stats.mode(actual_labels[idx])[0][0]
         print(actual_case, "-",new_label) # 어떤 새로운 라벨과 매칭이 되는지에 대해서 보는것
         if new_label in actual_case:
             actual_case.remove(new_label) # 새로운 라벨이 actualcase에 있다하면 한번 제거를 해줘야한다 이유는 다음번에 또 나오면 안되어서 제거 하고 그렇치 않을경우에는
             #new 라벨을 temp라벨즈에 가져온다.
         else:
-            new_label=temp_labels[new_label]
-            temp_labels.remove(new_label)
-            # 매칭되는 실제 label명을 dict형태로 저장.
-            matched_cluster[i] = new_label
-     else:
-            new_label = None
+          new_label = temp_labels[new_label]
+          temp_labels.remove(new_label)
+          # 매칭되는 실제 label명을 dict형태로 저장.
+      matched_cluster[i] = new_label
+    else:
+        new_label = None
         print(f"훈련된 label명: {i} >> 가장 빈번한 실제 label명: {new_label}")
     return matched_cluster
     #i의 값을 new_label로 지정을 해줍니다.
@@ -823,3 +822,384 @@ dbscan_labels = moon_dbscan.labels_
 dbscan_case_dict = dict((x,list(dbscan_labels).count(x)) for x in set(dbscan_labels))
 sorted_dbscan_case = sorted(dbscan_case_dict, key=dbscan_case_dict.get, reverse=True) #정렬은 sorted로 가능하다. reverse는 오름차순 내림차순
 print(sorted_dbscan_case)
+
+dbscan_perm_dict = find_matching_cluster(sorted_dbscan_case, moon_labels, dbscan_labels)
+print(dbscan_perm_dict)
+
+# 훈련된 label명과 실제 label명이 매칭되는 경우 >> 새로 매칭된 label명으로 변경.
+# 훈련된 label명과 실제 label명이 매칭되지 않는 경우 >> 훈련된 label명 유지.
+
+dbscan_new_labels = [label if label not in dbscan_perm_dict else dbscan_perm_dict[label] for label in dbscan_labels]
+print(np.array(dbscan_new_labels[:80]))
+print(np.array(dbscan_labels[:80]))
+
+kmean_labels = moon_km.labels_
+km_case = list(set(kmean_labels))
+kmean_perm_dict = find_matching_cluster(km_case,moon_labels,kmean_labels)
+kmean_perm_dict
+
+
+kmean_new_labels = [kmean_perm_dict[label] for label in kmean_labels]
+'''위와 다르게 개수를 알고있기때문에 그냥 진행을 해도 됩니다. '''
+# 위에서 훈련된 k-means의 정확도(accuracy)를 계산하세요.
+moon_kmeans_acc = accuracy_score(moon_labels, kmean_new_labels)
+print(f"Accuracy score of K-means : {round(moon_kmeans_acc, 4)}")
+
+# 위에서 훈련된 dbscan의 정확도(accuracy)를 계산하세요.
+moon_dbscan_acc = accuracy_score(moon_labels, dbscan_new_labels)
+print(f"Accuracy score of DBSCAN : {round(moon_dbscan_acc, 4)}")
+
+
+'''문제 28. Clustering : DBSCAN - silhouette score 비교하기.
+: 알고리즘에 따른 모델 평가 지표를 비교해보세요.'''
+# silhouette score도 accuracy score과 동일한 결과인지 비교해보세요.
+# 위에서 훈련된 k-means의 silhouette score을 계산하세요.
+km_sc_value = silhouette_score(np.array(moon_data), kmean_new_labels, metric="euclidean", sample_size=None, random_state=None)
+print(f'Silhouette score of K-means: {round(km_sc_value,4)}')
+
+# 위에서 훈련된 dbscan의 silhouette score을 계산하세요.
+dbscan_sc_value = silhouette_score(np.array(moon_data), dbscan_new_labels, metric="euclidean", sample_size=None, random_state=None)
+print(f'Silhouette score of DBSCAN: {round(dbscan_sc_value,4)}')
+
+'''slihouette의 결과를 보시면 위의 결과와 다르게 k-mean의 결과가 더 높습니다 그러한 이유는 
+silhouette score 계산 방법의 특징 때문에, 
+구형이 아닌 경우, 실제 시각화에서는 dbscan의 군집이 합리적이게 보이나, 
+silhouette score 점수는 오히려 낮게 나올 수 있음.  
+(데이터 분포가 구형이 아닌경우, 각 군집의 중심점이, 다른 군집과 가까워질 수 있기 때문.) 
+두개를 같이 한는 이유가 데이터 분포에 따라가 해석이 달라져서 같이 비교하면 좋습니다. 
+분포 클러스티링에서 db스캔처럼 잡힌것은 군집과 군집간의 분포 클러스티링을 하다보면 가까워져서 실루엣 스코어 점수가 낮게 나올수있습니다
+수치적으로 비교할때는 참고하는게 좋습니다. 
+
+
+
+
+
+문제 29. Clustering : DBSCAN - Adjusted rand index 비교하기.
+: 비교할 label이 있는 경우, ARI로 수치적 비교가 가능. silhouette과는 달리, ARI는 유사도 계산에서 실제 label과 예측된 label을 비교하게 됩니다.
+'''
+from sklearn.metrics import adjusted_rand_score
+km_ari = adjusted_rand_score(moon_labels, kmean_new_labels)
+print(f'Adjusted rand index (ARI) of K-means: {round(km_ari,4)}')
+dbscan_ari = adjusted_rand_score(moon_labels, dbscan_new_labels)
+print(f'Adjusted rand index (ARI) of DBSCAN: {round(dbscan_ari,4)}')
+
+'''dbscan을 사용할때는 accuracy를 한번 보고 모듈을 가져와서 ari를 확인해보는것을 추천한다.
+
+
+[참고] Clustering : DBSCAN - 항상 DBSCAN이 best일까요?
+'''
+
+# iris 데이터에도 DBSCAN이 적합한지 비교해봅시다.
+iris_compare_df = train_x.copy()
+
+#k-means 훈련시키기
+km_iris=KMeans(n_clusters=3).fit(iris_compare_df)
+iris_compare_df["km_iris_label"]= km_iris.labels_
+print(f"k-means label 종류: {list(set(km_iris.labels_))}")
+#dbscan 훈련하기
+dbscan_iris = DBSCAN(eps=0.05,min_samples=2).fit(iris_compare_df)
+iris_compare_df["dbscan_iris+label"] = dbscan_iris.labels_
+print(f"DBSCAN label 종류: {list(set(dbscan_iris.labels_))}")
+
+
+# 수치로 비교하기.
+# k-means.
+iris_km_labels = km_iris.labels_ # km 훈련된 전체 lable.
+iris_km_case = list(set(iris_km_labels)) # km 훈련된 lable 종류.
+# label 매칭 시키기.
+iris_km_perm_dict = find_matching_cluster(iris_km_case, train_y, iris_km_labels)
+iris_km_new_labels = [iris_km_perm_dict[label] for label in iris_km_labels]
+# DataFrame에 컬럼 추가하기.
+iris_compare_df["new_km_iris_label"] = iris_km_new_labels
+# iris_compare_df["new_km_iris_label"] = iris_compare_df["new_km_iris_label"].astype(str)
+print(iris_km_perm_dict)
+
+# dbscan.
+iris_dbscan_labels = dbscan_iris.labels_ # dbscan 훈련된 전체 lable.
+# labele 정렬하기.
+iris_dbscan_case_dict = dict((x,list(iris_dbscan_labels).count(x)) for x in set(iris_dbscan_labels))
+sorted_iris_dbscan_case = sorted(iris_dbscan_case_dict, key=iris_dbscan_case_dict.get, reverse=True)
+iris_dbscan_case_dict
+
+# label 매칭 시키기.
+iris_dbscan_perm_dict = find_matching_cluster(sorted_iris_dbscan_case, train_y, iris_dbscan_labels)
+#
+iris_dbscan_new_labels = [label if label not in iris_dbscan_perm_dict else iris_dbscan_perm_dict[label] for label in iris_dbscan_labels]
+# DataFrame에 컬럼 추가하기.
+iris_compare_df["new_dbscan_iris_label"] = iris_dbscan_new_labels
+# iris_compare_df["new_dbscan_iris_label"] = iris_compare_df["new_dbscan_iris_label"].astype(str)
+
+# k-means의 정확도를 계산하세요.
+kmeans_train_acc = accuracy_score(train_y, iris_km_new_labels)
+print(f"Accuracy score of K-means train set : {round(kmeans_train_acc, 4)}")
+
+# dbscan의 정확도를 계산하세요.
+dbscan_iris_acc = accuracy_score(train_y, iris_dbscan_new_labels)
+print(f"Accuracy score of DBSCAN : {round(dbscan_iris_acc, 4)}")
+# 시각화로 비교하기.
+
+fig = make_subplots(rows=1, cols=3, subplot_titles=("Actual", "K-means cluster", "DBSCAN cluster"))
+# actual.
+fig.add_trace(
+    go.Scatter(x=iris_compare_df["sepal_width"],
+               y=iris_compare_df["sepal_length"],
+               mode="markers",
+               marker=dict(color=train_y),
+               text=train_y
+               ),
+    row=1, col=1
+)
+# k-means.
+fig.add_trace(
+    go.Scatter(x=iris_compare_df["sepal_width"],
+               y=iris_compare_df["sepal_length"],
+               mode="markers",
+               marker=dict(color=iris_compare_df["new_km_iris_label"]),
+               text=iris_compare_df["new_km_iris_label"]
+               ),
+    row=1, col=2
+)
+# dbscan.
+fig.add_trace(
+    go.Scatter(x=iris_compare_df["sepal_width"],
+               y=iris_compare_df["sepal_length"],
+               mode="markers",
+               marker=dict(color=iris_compare_df["new_dbscan_iris_label"]),
+               text=iris_compare_df["new_dbscan_iris_label"]
+               ),
+    row=1, col=3
+)
+fig.update_layout(height=600, width=1000, showlegend=False)
+fig.show()
+
+
+'''문제 30. Clustering : HDBSCAN - 다양한 분포/사이즈의 데이터 생성하기.'''
+'''HDBSCAN 은 육안으로도 계층적 구조를 가지고 있는 여러가지 알고리즘을 섞여있어서 자기만의 장점이 있다.
+
+'''
+from sklearn.datasets import make_blobs
+
+# HDBSCAN을 훈련시킬 데이터를 생성해보세요.
+'''분포도를 선택을 해줄수있는데 중심점에 나눠서 설정하는게 아니고 한개의 분포도를 설정할수있어서 
+ 다른 분포를 가진 것을 생성하고 싶으면 하나 더 적어주어야합니다 그래서 blobs1,s2,s3 이렇게 지정을 해주어야합니다. 
+ 숫자가 커질수록 분포가 당연히 넓어집니다. 
+ 데이터를 한곳에 모으려면 numpy에서 제공하는 vstack을 쓰면 array를 list형태로 넣어주면 합쳐줍니다. np.vstack([moons,blobs1,s2,s3]_
+   moon 데이터 형식이면 태극 모양으로 나타낼거고 중심점을 보면 답이 나온다 
+   클러스터가 커지면 분포도가 넓어진다. 
+    '''
+moons, _ = make_moons(n_samples=100, noise=0.05)
+blobs1, _ = make_blobs(n_samples=50, centers=[(-0.75,2.25), (1.0, 2.0)], cluster_std=0.25)
+blobs2, _ = make_blobs(n_samples=30, centers=[(-0.3,-1), (4.0, 1.5)], cluster_std=0.3)
+blobs3, _ = make_blobs(n_samples=100, centers=[(3,-1), (4.0, 1.5)], cluster_std=0.4)
+
+hdb_data = np.vstack([moons, blobs1, blobs2, blobs3])
+hdb_data_df = pd.DataFrame(hdb_data, columns=["x", "y"])
+hdb_data_df.head()
+# scatter plot 생성.
+fig = px.scatter(hdb_data_df, x="x", y="y")
+# 그래프 사이즈 조절.
+fig.update_layout(width=600, height=500, title="HDBSCAN 데이터 분포")
+# 그래프 확인.
+fig.show()
+
+
+''''문제 31. Clustering : HDBSCAN - HDBSCAN 알고리즘 탐색하기.
+: 사용할 모듈을 install & import 하고, HDBSCAN 알고리즘의 파라미터를 살펴봅니다.
+
+HDBSCAN 모듈 페이지 바로가기 >>
+
+[Parameters]
+ dbscan은 데이터 수를 지정해주었다면 여기는 조금 다르다. 
+- min_cluster_size (default=5): 군집화를 위한 최소한의 cluster 사이즈.
+- min_samples (default=None) : 반경내 있어야할 최소 data points.
+- cluster_selection_epsilon(default=0.0): 거리 기준. 이 기준보다 아래의 거리는 cluster끼리 merge 됨.
+트리 형태의 그래프를 그릴려면 거리의 기준점을 0을 주어야 그 이하의 것들은 merge가 되기 때문입니다. 
+
+'''
+
+# hdbscan 모듈을 import 합니다.
+import hdbscan
+hdbscan_model = hdbscan.HDBSCAN()
+# help(hdbscan_model)
+'''문제 32. Clustering : HDBSCAN - HDBSCAN 알고리즘 훈련시키기.
+
+만든 데이터로 임의로 트레인을 하고 실행을 해보자 
+'''
+# HDBSCAN의 파라미터인 min_cluster_size 설정해봅시다.
+# min_cluster_size=5
+hdbscan_model = hdbscan.HDBSCAN(min_cluster_size=5)
+
+hdbscan_model.fit(hdb_data)
+# 훈련된 결과 label을 확인해보세요.
+hdbscan_label = hdbscan_model.fit_predict(hdb_data)
+hdbscan_label[:10]
+# 분류된 label의 총 갯수를 확인해보세요.
+set(hdbscan_label)
+'''문제 33. Clustering : HDBSCAN - HDBSCAN 알고리즘 파라미터 비교하기.
+: min_cluster_size, min_samples, cluster_selection_epsilon 파라미터를 변화하면서 훈련된 label에 어떤 영향을 주는지 확인해봅시다.
+'''
+hdb_data_df["hdbscan_label"] = hdbscan_label
+hdb_data_df["hdbscan_label"] = hdb_data_df["hdbscan_label"].astype(str)
+fig = px.scatter(hdb_data_df, x="x", y="y", color="hdbscan_label")
+fig.update_layout(width=600, height=500)
+fig.show()
+
+for mcn in [3,6,7,9,13]:
+    hdbscan_model = hdbscan.HDBSCAN(min_cluster_size=mcn,min_samples=None,predict_data=True).fit_predict(hdb_data)
+    hdb_data_df["hdbscan_label"] = hdbscan_model
+    hdb_data_df["hdbscan_label"] = hdb_data_df["hdbscan_label"].astype(str)
+    # outlier 추세확인.
+    hdbscan_case_dict = dict((x, list(hdbscan_label).count(x)) for x in set(hdbscan_label))
+    outliers = hdbscan_case_dict[-1]
+
+    fig = px.scatter(hdb_data_df, x="x", y="y", color="hdbscan_label")
+    fig.update_layout(width=600, height=500,
+                      title=f"min_cluster_size={mcn} > label수: {len(set(hdbscan_label))}, outlier: {outliers}")
+    fig.show()
+    '''최소 클러스터의 사이즈가 커졋다는 얘기는 label의 수가 줄어드는것이다 이유는 
+    군집간의 분포도를 크게크게 잡아가기때문에 한 중심에 클러스터의 들어가는 양이 많아지면 즉 한 원안에 들어가는 양이 많아지면
+    원의 갯수는 줄어들것입니다. <----내 생각 
+    (강사왈: 클러스터 갯수가 적어지는것  한 파라미터의 사이즈가 이정도는 되야한다 즉 최소 사이즈가 커졌다는것은 한개의 클러스터 사이즈로 미달이라서
+    옆에 있는것들도 한개의 군집으로 만들어지는것 
+    '''
+    # min_samples 파라미터가 3,5,7,9,13일때 clusters의 차이를 비교해보세요.
+    for ms in [3, 5, 7, 9, 13]:
+        hdbscan_label = hdbscan.HDBSCAN(min_cluster_size=5, min_samples=ms, prediction_data=True).fit_predict(hdb_data)
+        hdb_data_df["hdbscan_label"] = hdbscan_label
+        hdb_data_df["hdbscan_label"] = hdb_data_df["hdbscan_label"].astype(str)
+
+        # outlier 추세확인.
+        hdbscan_case_dict = dict((x, list(hdbscan_label).count(x)) for x in set(hdbscan_label))
+        outliers = hdbscan_case_dict[-1]
+
+        fig = px.scatter(hdb_data_df, x="x", y="y", color="hdbscan_label")
+        fig.update_layout(width=600, height=500,
+                          title=f"min_samples={ms} > label수: {len(set(hdbscan_label))}, outlier: {outliers}")
+        fig.show()
+
+        '''min_sample도 확인이 가능합니다. 
+        '''
+
+        # cluster_selection_epsilon 파라미터가 0.1,0.5,0.7,1.0 일때 clusters의 차이를 비교해보세요.
+        for cse in [0.1, 0.5, 0.7, 1.0]:
+            hdbscan_label = hdbscan.HDBSCAN(min_cluster_size=5, min_samples=None, cluster_selection_epsilon=cse,
+                                            prediction_data=True).fit_predict(hdb_data)
+            hdb_data_df["hdbscan_label"] = hdbscan_label
+            hdb_data_df["hdbscan_label"] = hdb_data_df["hdbscan_label"].astype(str)
+
+            # outlier 추세확인.
+            hdbscan_case_dict = dict((x, list(hdbscan_label).count(x)) for x in set(hdbscan_label))
+            outliers = hdbscan_case_dict[-1]
+
+            fig = px.scatter(hdb_data_df, x="x", y="y", color="hdbscan_label")
+            fig.update_layout(width=600, height=500,
+                              title=f"cluster_selection_epsilon={cse} > label수: {len(set(hdbscan_label))}, outlier: {outliers}")
+            fig.show()
+
+'''문제 34. Clustering : HDBSCAN - HDBSCAN의 다양한 시각화 확인하기.
+: HDBSCAN 알고리즘에서 사용되는 시각화를 해석해보세요.
+실제 업무보다는 그냥 알아두면 좋다. 
+
+'''
+
+# [문제 33]에서 최적으로 판단되는 파라미터를 사용해 hdbscan 모델을 훈련시켜보세요.
+# [참고] 시각화 생성을 위해 gen_min_span_tree=True로 훈련시켜야 합니다.
+hdbscan_model = hdbscan.HDBSCAN(min_cluster_size=5, min_samples=None, cluster_selection_epsilon=0.1, gen_min_span_tree=True).fit(hdb_data)
+
+# 훈련된 모델을 사용해서 minimum_spanning_tree 를 생성해보세요.
+# 각 point를 이어주는 line을 distance를 점수화한 mutual reachabillity를 사용하여 나타낸 그래프입니다.
+# point간의 거리를 나타낸 것이 아닌, line은 그려나가면서 아직 추가되지 않은 point들 중에서 mutual reachabillity가 가장 낮은 point를 하나씩만 추가하는 방식으로 진행.
+hdbscan_model.minimum_spanning_tree_.plot(edge_cmap="viridis",
+                                      edge_alpha=0.9,
+                                      node_size=10,
+                                      edge_linewidth=1)
+# 훈련된 모델을 사용해서 condensed_tree 를 생성해보세요.
+# [참고] cluster도 함께 보기위해 select_clusters=True로 설정해주세요.
+# 가장 오래 버틴 cluster 순으로 cluster을 분류합니다.
+hdbscan_model.condensed_tree_.plot(select_clusters=True)
+
+
+'''문제 35. Clustering : HDBSCAN - HDBSCAN와 K-means의 성능 비교하기.'''
+# 7개의 그룹으로 k-means를 훈련시켜보세요.
+hdb_data_km = KMeans(n_clusters=7).fit(hdb_data)
+hdb_data_km
+# 최적의 파라미터로 hdbscan를 훈련시켜보세요.
+hdb_data_hdbscan_label = hdbscan.HDBSCAN(min_cluster_size=5, min_samples=None, cluster_selection_epsilon=0.1, gen_min_span_tree=True).fit_predict(hdb_data)
+hdb_data_hdbscan_label[:10]
+hdb_data_df["kmeans_label"] = hdb_data_km.labels_
+hdb_data_df["kmeans_label"] = hdb_data_df["kmeans_label"].astype(str)
+hdb_data_df["hdbscan_label"] = hdb_data_hdbscan_label
+hdb_data_df["hdbscan_label"] = hdb_data_df["hdbscan_label"].astype(str)
+
+for label_case in ["hdbscan_label", "kmeans_label"]:
+  fig = px.scatter(hdb_data_df, x="x", y="y", color=label_case)
+  fig.update_layout(width=600, height=500, title=f"{label_case} 시각화")
+  fig.show()
+
+  '''문제 36. Clustering : HDBSCAN - HDBSCAN와 DBSCAN의 성능 비교하기.
+  '''
+
+hdb_data_dbscan = DBSCAN(eps=0.3, min_samples=5).fit(hdb_data)
+hdb_data_df["dbscan_label"] = hdb_data_dbscan.labels_
+hdb_data_df["dbscan_label"] = hdb_data_df["dbscan_label"].astype(str)
+
+for label_case in ["hdbscan_label", "dbscan_label"]:
+  fig = px.scatter(hdb_data_df, x="x", y="y", color=label_case)
+  fig.update_layout(width=600, height=500, title=f"{label_case} 시각화")
+  fig.show()
+'''
+문제 37. Clustering : HDBSCAN - 데이터 분포에 따른 HDBSCAN와 DBSCAN의 차이 확인하기.
+: 데이터의 분산차이와 points 수 차이에 따른 알고리즘 성능의 차이를 확인해보세요.'''
+
+# HDBSCAN와 DBSCAN을 비교할 데이터를 생성해보세요.
+# [참고] 분산이 극단적인 두가지 케이스를 생성해봅니다.
+blobs1, _ = make_blobs(n_samples=200, centers=[(-10, 5), (0, -5)], cluster_std=0.5)
+blobs2, _ = make_blobs(n_samples=200, centers=[(30, -1), (30, 1.5)], cluster_std=5.0)
+
+comp_data = np.vstack([blobs1, blobs2])
+comp_data_df = pd.DataFrame(comp_data, columns=["x", "y"])
+
+# scatter plot 생성.
+fig = px.scatter(comp_data_df, x="x", y="y")
+# 그래프 사이즈 조절.
+fig.update_layout(width=600, height=500, title="데이터 분포")
+# 그래프 확인.
+fig.show()
+
+# 생성된 데이터를 사용하여 dbscan와 hdbscan을 훈련시켜보세요.
+# 시각화를 위해, 각 모델의 label을 dataframe에 저장하고 string으로 변환하여주세요.
+
+# dbscan를 훈련시켜보세요.
+dbscan_model = DBSCAN(eps=0.6, min_samples=10).fit(comp_data)
+comp_data_df["dbscan_label"] = dbscan_model.labels_
+comp_data_df["dbscan_label"] = comp_data_df["dbscan_label"].astype(str)
+
+# hdbscan를 훈련시켜보세요.
+hdbscan_lables = hdbscan.HDBSCAN(min_cluster_size=5, min_samples=None, cluster_selection_epsilon=0.1, gen_min_span_tree=True).fit_predict(comp_data)
+comp_data_df["hdbscan_label"] = hdbscan_lables
+comp_data_df["hdbscan_label"] = comp_data_df["hdbscan_label"].astype(str)
+
+# 시각화하기 이전에, outlier를 구분하기 위한 color 컬럼을 생성해주세요.
+# [참고] 아래 color_dict를 사용해주세요.
+color_dict = {"-1":"#d8d8d8", "0":"#ff5e5b", "1":"#457b9d", "2":"#00cecb", "3":"#FFED66"}
+comp_data_df["dbscan_label_color"] = comp_data_df["dbscan_label"].map(color_dict)
+comp_data_df["hdbscan_label_color"] = comp_data_df["hdbscan_label"].map(color_dict)
+
+# 두 모델 결과를 시각화로 나타내고 차이가 나타나는지 확인해보세요.
+# [참고] 회색으로 나타나는 point는 outlier로 분류된 points입니다.
+for label_case in ["hdbscan_label", "dbscan_label"]:
+  fig = go.Figure(data=go.Scatter(
+      x=comp_data_df["x"],
+      y=comp_data_df["y"],
+      mode="markers",
+      marker=dict(color=comp_data_df[label_case+"_color"], showscale=True)
+  ))
+  fig.update_layout(width=600, height=500, title=f"{label_case} 시각화")
+  fig.show()
+
+  '''분포가 극명하기에 아웃라이어를 dbscan_label을 많이 잡고있습니다.
+   반면에 hdbscan 은 분포가 달라도 어느정도 잡아내는 알고리즘 입니다. '''
+
+  '''label이 정해지지 않은 데이터의 분류 목적으로 사용되는 만큼, 모델 선택부터 평가까지 자유도가 높은 편입니다.
+다양한 알고리즘의 차이를 기억하고, 데이터에 적합한 알고리즘을 사용하여 비교하는 것이 중요합니다.
+군집화의 목적에 따라 평가 지표를 자유롭게 조절하는 것이 중요합니다.'''
